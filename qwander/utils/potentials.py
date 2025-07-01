@@ -32,7 +32,7 @@ def degree_centrality_potential(G: nx.Graph) -> Dict[Any, float]:
 
     Parameters:
     -----------
-    G : nx.Graph
+    G: nx.Graph
         Undirected, simple graph.
 
     Returns:
@@ -51,10 +51,10 @@ def pagerank_potential(G: nx.Graph,
 
     Parameters:
     -----------
-    G : nx.Graph
+    G: nx.Graph
         Undirected, simple graph.
 
-    alpha : float, optional
+    alpha: float, optional
         Damping factor for PageRank (default 0.85).
 
     Returns:
@@ -73,10 +73,10 @@ def random_potential(G: nx.Graph,
 
     Parameters:
     -----------
-    G : nx.Graph
+    G: nx.Graph
         Undirected, simple graph.
 
-    seed : int, optional
+    seed: int, optional
         Seed for random number generator (for reproducibility).
 
     Returns:
