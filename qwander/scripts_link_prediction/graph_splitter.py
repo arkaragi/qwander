@@ -20,6 +20,7 @@ Outputs
 
 import json
 import random
+from collections import Counter
 from pathlib import Path
 from typing import List, Tuple
 
@@ -27,6 +28,7 @@ import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
 
+from load_cora import load_cora
 from qwander.qwander.utils.logger import logger, setup_logging
 
 # Configure root logger for simple timestamped console output
@@ -34,7 +36,7 @@ setup_logging()
 log = logger
 
 # Hardcoded config path for link prediction
-CONFIG_PATH = Path(__file__).parent / "config_link_prediction.json"
+CONFIG_PATH = Path(__file__).parent / "evaluation_config.json"
 
 with open(CONFIG_PATH, "r") as f:
     config = json.load(f)
@@ -43,10 +45,12 @@ with open(CONFIG_PATH, "r") as f:
 DATASET = config["dataset"]
 SPLITS_ROOT = Path(config["paths"]["splits_root"])
 FACEBOOK_EDGE_PATH = Path(config["paths"]["facebook_edgelist"])
+CORA_DIR = Path(config["paths"]["cora_root"])
 
 # Load split parameters from config file
 TEST_RATIOS = config["split"]["test_ratios"]
 DO_REDUCED = config["split"]["do_reduced"]
+NODES_TO_KEEP = config["split"]["nodes_to_keep"]
 SEED = config["split"]["seed"]
 
 
@@ -386,6 +390,9 @@ def build_and_save_split(G: nx.Graph,
     for ratio in test_ratios:
         # Create output directory for this split
         out_dir = SPLITS_ROOT / f"{split_tag}_test{int(ratio * 100)}"
+        if DATASET == "cora":
+            class_part = "-".join(f"n{c}" for c in sorted(NODES_TO_KEEP))
+            out_dir = SPLITS_ROOT / f"{split_tag}_test{int(ratio * 100)}_{class_part}"
         out_dir.mkdir(parents=True, exist_ok=True)
 
         # Split edges into train and test (positive) ensuring graph connectivity
@@ -529,8 +536,66 @@ def main():
             meta_extra = {"graph": "Facebook (ego-net SNAP)", "reduced": False}
             build_and_save_split(G_full, tag, TEST_RATIOS, meta_extra)
 
+    # Handle the Cora citation network with class filtering
+    elif DATASET == "cora":
+        log.info(f"Loading Cora citation network from: {CORA_DIR}")
+
+        if not CORA_DIR.exists():
+            raise FileNotFoundError(f"Cora directory not found at: {CORA_DIR}")
+
+        # 1. Load full Cora graph
+        G_full = load_cora(CORA_DIR)
+
+        # 2. Read string labels and build label→int mapping
+        id_to_label_str = {}
+        with (CORA_DIR / "cora.content").open() as f:
+            for line in f:
+                parts = line.strip().split()
+                paper_id = parts[0]
+                label_str = parts[-1]
+                id_to_label_str[paper_id] = label_str
+
+        unique_labels = sorted(set(id_to_label_str.values()))
+        label2idx = {lbl: idx for idx, lbl in enumerate(unique_labels)}
+        id_to_label = {pid: label2idx[lbl] for pid, lbl in id_to_label_str.items()}
+
+        # 3. Compute and log class statistics
+        total_papers = len(id_to_label)
+        class_counts = Counter(id_to_label.values())
+        idx2label = {idx: lbl for lbl, idx in label2idx.items()}
+        log.info("Cora class distribution (total %d papers):", total_papers)
+        for idx in sorted(class_counts):
+            count = class_counts[idx]
+            pct = 100.0 * count / total_papers
+            log.info("  Class %d (%s): %d papers (%.1f%%)", idx, idx2label[idx], count, pct)
+
+        # 4. Filter nodes by integer class
+        nodes_sorted = sorted(G_full.nodes(), key=lambda n: int(n))
+        keep_nodes = [n for n in nodes_sorted if id_to_label.get(n) in NODES_TO_KEEP]
+        G_sub = G_full.subgraph(keep_nodes).copy()
+
+        # 5. Remove any isolates
+        isolates = list(nx.isolates(G_sub))
+        if isolates:
+            log.info("Removing %d isolated node(s)", len(isolates))
+            G_sub.remove_nodes_from(isolates)
+
+        log_graph_stats(G_sub, "Filtered Cora citation network")
+        tag = "cora"
+        meta_extra = {
+            "graph": "Cora citation network",
+            "original_nodes": G_full.number_of_nodes(),
+            "original_edges": G_full.number_of_edges(),
+            "filtered_classes": NODES_TO_KEEP,
+            "filtered_nodes": G_sub.number_of_nodes(),
+            "filtered_edges": G_sub.number_of_edges(),
+            "seed": SEED,
+        }
+        build_and_save_split(G_sub, tag, TEST_RATIOS, meta_extra)
+
     else:
-        raise ValueError(f"Unknown DATASET: {DATASET}. Please use 'karate' or 'facebook'.")
+        raise ValueError(f"Unknown DATASET: {DATASET}. "
+                         f"Please use 'karate' or 'facebook'.")
 
 
 if __name__ == "__main__":
