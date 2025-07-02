@@ -1,0 +1,44 @@
+{
+    "dataset": "karate",
+    "paths": {
+        "splits_root": "./datasets_linkpred",
+        "results_root": "./results",
+        "facebook_edgelist": "../../datasets/Facebook/facebook_combined.txt"
+    },
+    "split": {
+        "test_ratios": [0.1, 0.25, 0.5],
+        "do_reduced": true,
+        "seed": 42
+    },
+    "simulation": {
+        "coin_types": ["grover"],
+        "potentials": [null],
+        "steps": 4,
+        "random_seed": 42
+    },
+    "dtqw_embedding": {
+      "do_final": true,
+      "do_average": true,
+      "do_svd": true,
+      "do_kernel_pca": true,
+      "svd_dim": 32,
+      "kpca_dim": 32,
+      "kpca_metric": "bhattacharyya",
+      "random_state": 42
+    },
+    "classical_embedding": {
+      "do_deepwalk": true,
+      "do_node2vec": true,
+      "dw_dim": 32,
+      "n2v_dim": 32,
+      "walk_length": 20,
+      "num_walks": 100,
+      "window_size": 5,
+      "epochs": 5,
+      "p_param": 0.25,
+      "q_param": 0.75
+    },
+    "evaluation": {
+      "score": "dot"
+    }
+}
