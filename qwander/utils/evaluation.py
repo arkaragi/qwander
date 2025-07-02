@@ -3,18 +3,19 @@ Reusable classes for node classification and link prediction
 benchmarking, including common metrics and reporting tools.
 """
 
-from typing import Dict, Optional, Iterable, Any, Sequence, Tuple
+from typing import Dict, Optional, Iterable, Any, Sequence, Tuple, List
 
 import numpy as np
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (
     accuracy_score,
     precision_score,
-    average_precision_score,
     recall_score,
     f1_score,
-    precision_recall_fscore_support,
     roc_auc_score,
+    average_precision_score,
+    precision_recall_curve,
+    precision_recall_fscore_support,
     classification_report,
     confusion_matrix
 )
@@ -24,14 +25,18 @@ from sklearn.model_selection import train_test_split
 def _cosine(u: np.ndarray, v: np.ndarray) -> float:
     return float(u.dot(v) / (np.linalg.norm(u) * np.linalg.norm(v) + 1e-12))
 
+
 def _dot(u: np.ndarray, v: np.ndarray) -> float:
     return float(u.dot(v))
+
 
 def _neg_l2(u: np.ndarray, v: np.ndarray) -> float:
     return -float(np.linalg.norm(u - v))
 
+
 def _neg_l1(u: np.ndarray, v: np.ndarray) -> float:
     return -float(np.linalg.norm(u - v, ord=1))
+
 
 _SCORE_MAP = {
     "cosine": _cosine,
@@ -297,34 +302,25 @@ class LinkPredictionEvaluator:
         Node pair similarity function.
         Supported methods are: ("cosine", "dot", "neg_l2", "neg_l1").
 
-    threshold: float, default=0.0
-        Threshold for converting scores to binary predictions.
-
     Attributes
     ----------
     score_fn: callable
         Function mapping two vectors to a similarity/distance score.
-
-    threshold: float
-        Classification threshold for hard edge prediction.
 
     _results: dict or None
         Stores the results of the last evaluation.
     """
 
     def __init__(self,
-                 score: str = "cosine",
-                 threshold: float = 0.0):
+                 score: str = "cosine"):
         # Select similarity/distance scoring function
         if isinstance(score, str):
             try:
                 self.score_fn = _SCORE_MAP[score.lower()]
             except KeyError:
-                raise ValueError(f"Unknown score='{score}'. "
-                                 f"Valid: {list(_SCORE_MAP)}")
+                raise ValueError(f"Unknown score='{score}'. Valid: {list(_SCORE_MAP)}")
         else:
             raise TypeError("`score` must be a string key.")
-        self.threshold = threshold
         self._results = None
 
     @property
@@ -334,11 +330,11 @@ class LinkPredictionEvaluator:
         """
         return self._results
 
-    def _check_inputs(self,
-                      embeddings: np.ndarray,
+    @staticmethod
+    def _check_inputs(embeddings: np.ndarray,
                       nodes_list: Sequence[str],
                       test_pos: Iterable[Tuple[str, str]],
-                      test_neg: Iterable[Tuple[str, str]]):
+                      test_neg: Iterable[Tuple[str, str]]) -> tuple:
         """
         Validate and preprocess input arrays and edge lists.
 
@@ -371,12 +367,13 @@ class LinkPredictionEvaluator:
         test_neg = list(test_neg)
         if not test_pos or not test_neg or len(test_pos) != len(test_neg):
             raise ValueError("test_pos/test_neg must be non-empty and equal sized")
+
         return X, nodes_list, test_pos, test_neg
 
-    def _edges_to_indices(self,
-                          nodes_list,
-                          test_pos,
-                          test_neg):
+    @staticmethod
+    def _edges_to_indices(nodes_list: List[str],
+                          test_pos: List[Tuple[str, str]],
+                          test_neg: List[Tuple[str, str]]) -> Tuple[np.ndarray, np.ndarray]:
         """
         Convert (u, v) edge pairs to indices using nodes_list.
 
@@ -392,7 +389,7 @@ class LinkPredictionEvaluator:
         """
         idx_of = {node: i for i, node in enumerate(nodes_list)}
 
-        def idx_pairs(edges):
+        def idx_pairs(edges: List[Tuple[str, str]]) -> np.ndarray:
             try:
                 return np.asarray([[idx_of[u], idx_of[v]] for u, v in edges], dtype=int)
             except KeyError as err:
@@ -400,12 +397,13 @@ class LinkPredictionEvaluator:
 
         pos_idx = idx_pairs(test_pos)
         neg_idx = idx_pairs(test_neg)
+
         return pos_idx, neg_idx
 
     def _compute_scores(self,
-                        X,
-                        pos_idx,
-                        neg_idx):
+                        X: np.ndarray,
+                        pos_idx: np.ndarray,
+                        neg_idx: np.ndarray) -> np.ndarray:
         """
         Compute similarity/distance scores for all candidate edges.
 
@@ -427,9 +425,8 @@ class LinkPredictionEvaluator:
         return y_scores
 
     def _compute_metrics(self,
-                         y_scores,
-                         K,
-                         threshold):
+                         y_scores: np.ndarray,
+                         K: int) -> Dict[str, float]:
         """
         Compute standard link prediction metrics.
 
@@ -437,38 +434,24 @@ class LinkPredictionEvaluator:
         ----------
         y_scores: np.ndarray
             Scores for positive/negative edges (pos then neg).
-
         K: int
             Number of positive (and negative) edges.
-
-        threshold: float
-            Cutoff for hard predictions.
 
         Returns
         -------
         metrics: dict
-            Dictionary of AUC, average_precision, precision, recall, f1, hits@K.
+            Dictionary of AUC, average_precision, max_f1, max_precision,
+            max_recall, hits@K, best_threshold.
         """
         y_true = np.concatenate([np.ones(K, dtype=int), np.zeros(K, dtype=int)])
-        y_pred = (y_scores > threshold).astype(int)
 
+        # ROC AUC & AP
         auc = float(roc_auc_score(y_true, y_scores))
         ap = float(average_precision_score(y_true, y_scores))
-        prec = float(precision_score(y_true, y_pred, zero_division=0))
-        rec = float(recall_score(y_true, y_pred, zero_division=0))
-        f1 = float(f1_score(y_true, y_pred, zero_division=0))
-
-        # Hits@K: fraction of true positives in the top K scores
-        top_k_idx = np.argsort(-y_scores)[:K]
-        hits_at_k = float(y_true[top_k_idx].sum() / K)
 
         return {
             "auc": auc,
-            "average_precision": ap,
-            "precision": prec,
-            "recall": rec,
-            "f1": f1,
-            f"hits@{K}": hits_at_k,
+            "average_precision": ap
         }
 
     def evaluate(self,
@@ -512,7 +495,7 @@ class LinkPredictionEvaluator:
 
         # 4. Compute evaluation metrics
         K = len(test_pos)
-        results = self._compute_metrics(y_scores, K, self.threshold)
+        results = self._compute_metrics(y_scores, K)
         self._results = results
 
         return results
