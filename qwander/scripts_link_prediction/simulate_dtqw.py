@@ -16,6 +16,7 @@ from typing import Tuple, Optional
 
 import networkx as nx
 
+from load_cora import load_cora
 from qwander.qwander.simulators.dtqw_simulator import DTQWSimulator
 from qwander.qwander.utils.logger import logger, setup_logging
 
@@ -24,7 +25,7 @@ setup_logging()
 log = logger
 
 # You can allow CLI override, or just hardcode the config path
-CONFIG_PATH = Path(__file__).parent / "config_link_prediction.json"
+CONFIG_PATH = Path(__file__).parent / "evaluation_config.json"
 
 with open(CONFIG_PATH, "r") as f:
     config = json.load(f)
@@ -33,6 +34,7 @@ with open(CONFIG_PATH, "r") as f:
 DATASET = config["dataset"]
 SPLITS_ROOT = Path(config["paths"]["splits_root"])
 FACEBOOK_EDGE_PATH = Path(config["paths"]["facebook_edgelist"])
+CORA_DIR = Path(config["paths"]["cora_root"])
 SPLIT_GLOB = f'{DATASET}*'
 
 # Load simulation parameters from config file
@@ -68,6 +70,10 @@ def load_train_graph(split_dir: Path) -> Tuple[nx.Graph, nx.Graph]:
         # Facebook: load full graph from edge list (update path as needed)
         FACEBOOK_EDGE_PATH = Path("../../datasets/Facebook/facebook_combined.txt")
         full = nx.read_edgelist(FACEBOOK_EDGE_PATH, nodetype=str)
+
+    elif split_dir.name.startswith("cora"):
+        # Cora: load the original Cora graph for reference
+        full = load_cora(CORA_DIR)
 
     else:
         raise ValueError(f"Unknown split type: {split_dir.name}")
