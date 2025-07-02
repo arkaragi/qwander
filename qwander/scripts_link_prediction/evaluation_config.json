@@ -9,7 +9,7 @@
     "split": {
         "test_ratios": [0.0],
         "do_reduced": true,
-        "nodes_to_keep": [1, 2, 3, 4],
+        "nodes_to_keep": [2, 3],
         "seed": 42
     },
     "simulation": {
