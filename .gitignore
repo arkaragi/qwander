@@ -205,3 +205,9 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Evaluation Datasets
+datasets_linkpred/
+datasets_nodecls/
+results_linkpred/
+results_nodecls/
