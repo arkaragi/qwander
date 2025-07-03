@@ -48,7 +48,7 @@ FACEBOOK_EDGE_PATH = Path(config["paths"]["facebook_edgelist"])
 CORA_DIR = Path(config["paths"]["cora_root"])
 
 # Load split parameters from config file
-TEST_RATIOS = config["split"]["test_ratios"]
+SPLIT_RATIOS = config["split"]["split_ratios"]
 DO_REDUCED = config["split"]["do_reduced"]
 NODES_TO_KEEP = config["split"]["nodes_to_keep"]
 SEED = config["split"]["seed"]
@@ -472,7 +472,7 @@ def main():
         # Build and save train/test splits for all specified test ratios
         tag = "karate"
         meta_extra = {"graph": "Karate Club"}
-        build_and_save_split(G_full, tag, TEST_RATIOS, meta_extra)
+        build_and_save_split(G_full, tag, SPLIT_RATIOS, meta_extra)
 
     # Handle the Facebook dataset
     elif DATASET == "facebook":
@@ -517,7 +517,7 @@ def main():
                 "subgraph_edges": G_sub.number_of_edges(),
                 "seed": SEED,
             }
-            build_and_save_split(G_sub, tag, TEST_RATIOS, meta_extra)
+            build_and_save_split(G_sub, tag, SPLIT_RATIOS, meta_extra)
 
         else:
             # Use the full Facebook network (only recommended for classical baselines)
@@ -534,7 +534,7 @@ def main():
 
             tag = "facebook"
             meta_extra = {"graph": "Facebook (ego-net SNAP)", "reduced": False}
-            build_and_save_split(G_full, tag, TEST_RATIOS, meta_extra)
+            build_and_save_split(G_full, tag, SPLIT_RATIOS, meta_extra)
 
     # Handle the Cora citation network with class filtering
     elif DATASET == "cora":
@@ -591,7 +591,7 @@ def main():
             "filtered_edges": G_sub.number_of_edges(),
             "seed": SEED,
         }
-        build_and_save_split(G_sub, tag, TEST_RATIOS, meta_extra)
+        build_and_save_split(G_sub, tag, SPLIT_RATIOS, meta_extra)
 
     else:
         raise ValueError(f"Unknown DATASET: {DATASET}. "

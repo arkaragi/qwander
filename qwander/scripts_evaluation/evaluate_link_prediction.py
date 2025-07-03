@@ -45,7 +45,7 @@ setup_logging()
 log = logger
 
 # You can allow CLI override, or just hardcode the config path
-CONFIG_PATH = Path(__file__).parent / "config_link_prediction.json"
+CONFIG_PATH = Path(__file__).parent / "evaluation_config.json"
 
 with open(CONFIG_PATH, "r") as f:
     config = json.load(f)
@@ -56,7 +56,7 @@ SPLITS_ROOT = Path(config["paths"]["splits_root"])
 RESULTS_ROOT = Path(config["paths"]["results_root"])
 
 # Evaluation options
-SCORE = config["evaluation"]["score"]
+SCORE = config["evaluation_linkpred"]["score"]
 
 
 def _all_split_dirs(root: Path,
