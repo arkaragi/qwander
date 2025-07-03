@@ -232,6 +232,8 @@ def generate_classical_embeddings() -> None:
             nodes_sorted = sorted(G_train.nodes(), key=int)
         elif DTQW_SPLIT_GLOB.startswith("facebook"):
             nodes_sorted = sorted(G_train.nodes(), key=str)
+        elif DTQW_SPLIT_GLOB.startswith("cora"):
+            nodes_sorted = sorted(G_train.nodes(), key=int)
         else:
             nodes_sorted = sorted(G_train.nodes())
 

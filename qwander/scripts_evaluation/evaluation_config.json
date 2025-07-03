@@ -1,15 +1,15 @@
 {
     "dataset": "karate",
     "paths": {
-        "splits_root": "./datasets_nodecls",
-        "results_root": "./results_nodecls",
+        "splits_root": "./datasets_linkpred",
+        "results_root": "./results_linkpred",
         "facebook_edgelist": "../../datasets/Facebook/facebook_combined.txt",
         "cora_root": "../../datasets/Cora"
     },
     "split": {
-        "split_ratios": [0.0],
+        "split_ratios": [0.1, 0.25, 0.5],
         "do_reduced": true,
-        "nodes_to_keep": [2, 3],
+        "nodes_to_keep": [0, 1],
         "seed": 42
     },
     "simulation": {
@@ -44,6 +44,6 @@
       "score": "dot"
     },
     "evaluation_nodecls": {
-      "test_ratio": 0.2
+      "test_ratio": [0.25, 0.5]
     }
 }

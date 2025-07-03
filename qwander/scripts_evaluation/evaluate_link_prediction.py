@@ -192,7 +192,6 @@ def _eval_classical_baselines(split_dir: Path,
     return df
 
 
-
 def _eval_dtqw_experiment(split_dir: Path,
                           exp_dir: Path,
                           node_list: list[str],
