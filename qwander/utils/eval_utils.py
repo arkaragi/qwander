@@ -3,9 +3,11 @@ Utility functions for loading, aligning, generating, and evaluating
 classical and DTQW-based graph embeddings.
 """
 
+import logging
 import pathlib
 import pickle
 import re
+from math import ceil
 from typing import Dict, Union, List, Optional, Tuple
 
 import matplotlib.pyplot as plt
@@ -77,7 +79,6 @@ def _load_embeddings(filepath: Union[str, pathlib.Path]) -> Union[pd.DataFrame, 
         )
 
     return obj
-
 
 
 def _ensure_order(emb: Union[pd.DataFrame, np.ndarray],
@@ -402,62 +403,6 @@ def plot_grouped_bars(df_master: pd.DataFrame,
     plt.close(fig)
 
 
-def generate_all_embeddings_karate(node_list: List[str],
-                                   dtqw_embed_dir: Union[str, pathlib.Path],
-                                   svd_dim: int = 32,
-                                   kpca_dim: int = 32,
-                                   kpca_metric: str = "bhattacharyya") -> Dict[str, np.ndarray]:
-    """
-    Load classical (DeepWalk, Node2Vec) and DTQW-based embeddings for the Karate Club graph,
-    returning a dict mapping method names to ordered embedding arrays.
-
-    Parameters
-    ----------
-    node_list : List[str]
-        Nodes in the graph, in the desired row order.
-    dtqw_embed_dir : str or Path
-        Directory containing DTQW embeddings (final_step.pkl, time_avg.pkl, etc.).
-    svd_dim : int
-        Dimension for the SVD-reduced DTQW embeddings.
-    kpca_dim : int
-        Dimension for the KPCA-reduced DTQW embeddings.
-    kpca_metric : str
-        Kernel metric for KPCA (e.g. "bhattacharyya", "cosine").
-
-    Returns
-    -------
-    Dict[str, np.ndarray]
-        Embedding name → (n_nodes × dim) array, rows aligned to `node_list`.
-    """
-    base = pathlib.Path(dtqw_embed_dir)
-    classical = base.parent.parent / "karate_classical"
-
-    embeddings: Dict[str, np.ndarray] = {}
-
-    # classical embeddings
-    for name, fname in [
-        ("DeepWalk", "deepwalk_32.pkl"),
-        ("Node2Vec", "node2vec_32.pkl"),
-    ]:
-        path = classical / fname
-        emb = _load_embeddings(path)
-        embeddings[name] = _ensure_order(emb, node_list)
-
-    # DTQW embeddings
-    dtqw_files = [
-        ("DTQW_Final", "final_step.pkl"),
-        ("DTQW_Average", "time_avg.pkl"),
-        (f"DTQW_SVD", f"svd_{svd_dim}.pkl"),
-        (f"DTQW_KPCA", f"kpca_{kpca_metric}_{kpca_dim}.pkl"),
-    ]
-    for name, fname in dtqw_files:
-        path = base / fname
-        emb = _load_embeddings(path)
-        embeddings[name] = _ensure_order(emb, node_list)
-
-    return embeddings
-
-
 def generate_all_embeddings_karate_lp(node_list: List[str],
                                       dtqw_embed_dir: Union[str, pathlib.Path]) -> Dict[str, np.ndarray]:
     """
@@ -488,67 +433,12 @@ def generate_all_embeddings_karate_lp(node_list: List[str],
     return embeddings
 
 
-def generate_all_embeddings_cora(node_list: List[str],
-                                 dtqw_embed_dir: Union[str, pathlib.Path],
-                                 svd_dim: int = 64,
-                                 kpca_dim: int = 64,
-                                 kpca_metric: str = "bhattacharyya") -> Dict[str, np.ndarray]:
-    """
-    Load classical (DeepWalk, Node2Vec) and DTQW-based embeddings for the Cora citation network,
-    returning a dict mapping method names to ordered embedding arrays.
-
-    Parameters
-    ----------
-    node_list : List[str]
-        Nodes in the graph, in the desired row order.
-    dtqw_embed_dir : str or Path
-        Directory containing DTQW embeddings (final_step.pkl, time_avg.pkl, etc.).
-    svd_dim : int
-        Dimension for the SVD-reduced DTQW embeddings.
-    kpca_dim : int
-        Dimension for the KPCA-reduced DTQW embeddings.
-    kpca_metric : str
-        Kernel metric for KPCA (e.g. "bhattacharyya", "cosine").
-
-    Returns
-    -------
-    Dict[str, np.ndarray]
-        Embedding name → (n_nodes × dim) array, rows aligned to `node_list`.
-    """
-    base = pathlib.Path(dtqw_embed_dir)
-
-    embeddings: Dict[str, np.ndarray] = {}
-
-    # classical embeddings
-    for name, fname in [
-        ("DeepWalk", "deepwalk_64.pkl"),
-        ("Node2Vec", "node2vec_64.pkl"),
-    ]:
-        path = base / fname
-        emb = _load_embeddings(path)
-        embeddings[name] = _ensure_order(emb, node_list)
-
-    # DTQW embeddings
-    dtqw_files = [
-        ("DTQW_Final", "final_step.pkl"),
-        ("DTQW_Average", "time_avg.pkl"),
-        (f"DTQW_SVD", f"svd_{svd_dim}.pkl"),
-        (f"DTQW_KPCA", f"kpca_{kpca_metric}_{kpca_dim}.pkl"),
-    ]
-    for name, fname in dtqw_files:
-        path = base / fname
-        emb = _load_embeddings(path)
-        embeddings[name] = _ensure_order(emb, node_list)
-
-    return embeddings
-
-
 def evaluate_models_and_plot_link_prediction(embeddings_dict: Dict[str, np.ndarray],
                                              nodes_list: List[str],
                                              test_edges: Optional[Tuple[list, list]] = None,
                                              split_dir: Optional[pathlib.Path] = None,
                                              score: str = "cosine",
-                                             out_dir: pathlib.Path = pathlib.Path("../scripts_link_prediction"),
+                                             out_dir: pathlib.Path = pathlib.Path("../scripts_evaluation"),
                                              title: str | None = None) -> pd.DataFrame:
     """
     Evaluate *pre-trained* embeddings on a **fixed** link-prediction split.
@@ -635,133 +525,138 @@ def evaluate_models_and_plot_link_prediction(embeddings_dict: Dict[str, np.ndarr
     return df
 
 
-# def evaluate_models_and_plot_node_cls(embeddings_dict: Dict[str, np.ndarray],
-#                                       labels: np.ndarray,
-#                                       test_size: float = 0.3,
-#                                       random_state: int = 42,
-#                                       out_dir: pathlib.Path = pathlib.Path("."),
-#                                       title: str | None = None) -> pd.DataFrame:
-#     """
-#     Train & evaluate logistic‐regression classifiers on multiple embeddings,
-#     build a summary table, and plot their test‐set confusion matrices side by side.
-#
-#     Parameters
-#     ----------
-#     embeddings_dict : Dict[str, np.ndarray]
-#         Mapping from model name to embedding matrix of shape (n_samples, dim).
-#         Rows must align with `labels`.
-#     labels : numpy.ndarray of shape (n_samples,)
-#         Ground-truth labels for each node.
-#     test_size : float, default=0.3
-#         Fraction of data held out for testing (0 < test_size < 1).
-#     random_state : int, default=42
-#         Seed for train/test splitting and classifier.
-#     out_dir : pathlib.Path
-#         Directory to save the summary CSV and confusion‐matrix figure.
-#     title : str or None
-#         Custom title for the confusion‐matrix figure. Defaults to
-#         "Node Classification (test size = XX%)".
-#
-#     Returns
-#     -------
-#     pandas.DataFrame
-#         Indexed by model name, with columns:
-#         ["train_accuracy","test_accuracy","precision","recall","f1",
-#          "precision_macro","recall_macro","f1_macro"].
-#
-#     Raises
-#     ------
-#     ValueError
-#         If inputs are invalid (empty embeddings, shape mismatches, invalid test_size).
-#     """
-#     logger = logging.getLogger(__name__)
-#
-#     # ─────────── Validation ───────────
-#     if not embeddings_dict:
-#         raise ValueError("No embeddings provided for evaluation.")
-#     if not (0.0 < test_size < 1.0):
-#         raise ValueError(f"test_size must be in (0,1); got {test_size!r}.")
-#     n = labels.shape[0]
-#     for name, emb in embeddings_dict.items():
-#         if emb.ndim != 2 or emb.shape[0] != n:
-#             raise ValueError(
-#                 f"Embedding '{name}' has shape {emb.shape}; expected ({n}, dim)."
-#             )
-#
-#     # ─────────── Evaluation ───────────
-#     records: Dict[str, Dict[str, float]] = {}
-#     confusion_matrices = []
-#     model_names = []
-#
-#     for name, emb in embeddings_dict.items():
-#         res = evaluate_node_classification(
-#             embeddings=emb,
-#             labels=labels,
-#             test_size=test_size,
-#             random_state=random_state
-#         )
-#         model_names.append(name)
-#         confusion_matrices.append(res["confusion_matrix_test"])
-#
-#         # extract scalar metrics
-#         records[name] = {
-#             "train_accuracy": res["train_accuracy"],
-#             "test_accuracy": res["test_accuracy"],
-#             "precision": res["precision"],
-#             "recall": res["recall"],
-#             "f1": res["f1"],
-#             "precision_macro": res["precision_macro"],
-#             "recall_macro": res["recall_macro"],
-#             "f1_macro": res["f1_macro"],
-#         }
-#
-#     df = pd.DataFrame.from_dict(records, orient="index")
-#     df.index.name = "embedding"
-#
-#     # ─────────── Persist metrics CSV ───────────
-#     if out_dir is not None:
-#         out_dir.mkdir(parents=True, exist_ok=True)
-#         csv_path = out_dir / f"classif_metrics_{int(test_size * 100)}.csv"
-#         df.to_csv(csv_path, float_format="%.6f")
-#         logger.info("Saved metrics → %s", csv_path)
-#
-#     # ─────────── Plot confusion matrices ───────────
-#     n_models = len(model_names)
-#     cols = 2
-#     rows = ceil(n_models / cols)
-#     fig, axes = plt.subplots(rows, cols, figsize=(6 * cols, 5 * rows), squeeze=False)
-#
-#     for idx, (name, cm) in enumerate(zip(model_names, confusion_matrices)):
-#         r, c = divmod(idx, cols)
-#         ax = axes[r][c]
-#         im = ax.imshow(cm, cmap=plt.cm.Blues, interpolation="nearest")
-#         ax.set_title(f"{name} — Test CM")
-#         ax.set_xlabel("Predicted")
-#         ax.set_ylabel("True")
-#         # remove ticks
-#         ax.set_xticks([])
-#         ax.set_yticks([])
-#         # annotate cells
-#         thresh = cm.max() / 2
-#         for i in range(cm.shape[0]):
-#             for j in range(cm.shape[1]):
-#                 color = "white" if cm[i, j] > thresh else "black"
-#                 ax.text(j, i, cm[i, j],
-#                         ha="center", va="center", color=color, fontsize=16)
-#     # remove any unused subplots
-#     for idx in range(n_models, rows * cols):
-#         r, c = divmod(idx, cols)
-#         fig.delaxes(axes[r][c])
-#
-#     split_pct = int(test_size * 100)
-#     default_title = f"Node Classification Confusion Matrices (test size = {split_pct}%)"
-#     fig.suptitle(title or default_title, fontsize=14, y=1.02)
-#     plt.tight_layout()
-#
-#     if out_dir is not None:
-#         cm_path = out_dir / f"classif_cm_{split_pct}.png"
-#         fig.savefig(cm_path, dpi=300, bbox_inches="tight")
-#         logger.info("Saved confusion matrices → %s", cm_path)
-#     plt.close(fig)
-#
-#     return df
+def evaluate_models_and_plot_node_cls(embeddings_dict: Dict[str, np.ndarray],
+                                      labels: np.ndarray,
+                                      test_size: float = 0.3,
+                                      random_state: int = 42,
+                                      out_dir: pathlib.Path = pathlib.Path("."),
+                                      title: str | None = None) -> pd.DataFrame:
+    """
+    Train & evaluate logistic‐regression classifiers on multiple embeddings,
+    build a summary table, and plot their test‐set confusion matrices side by side.
+
+    Parameters
+    ----------
+    embeddings_dict : Dict[str, np.ndarray]
+        Mapping from model name to embedding matrix of shape (n_samples, dim).
+        Rows must align with `labels`.
+
+    labels : numpy.ndarray of shape (n_samples,)
+        Ground-truth labels for each node.
+
+    test_size : float, default=0.3
+        Fraction of data held out for testing (0 < test_size < 1).
+
+    random_state : int, default=42
+        Seed for train/test splitting and classifier.
+
+    out_dir : pathlib.Path
+        Directory to save the summary CSV and confusion‐matrix figure.
+
+    title : str or None
+        Custom title for the confusion‐matrix figure. Defaults to
+        "Node Classification (test size = XX%)".
+
+    Returns
+    -------
+    pandas.DataFrame
+        Indexed by model name, with columns:
+        ["train_accuracy","test_accuracy","precision","recall","f1",
+         "precision_macro","recall_macro","f1_macro"].
+
+    Raises
+    ------
+    ValueError
+        If inputs are invalid (empty embeddings, shape mismatches, invalid test_size).
+    """
+    logger = logging.getLogger(__name__)
+
+    # ─────────── Validation ───────────
+    if not embeddings_dict:
+        raise ValueError("No embeddings provided for evaluation.")
+    if not (0.0 < test_size < 1.0):
+        raise ValueError(f"test_size must be in (0,1); got {test_size!r}.")
+    n = labels.shape[0]
+    for name, emb in embeddings_dict.items():
+        if emb.ndim != 2 or emb.shape[0] != n:
+            raise ValueError(f"Embedding '{name}' has shape {emb.shape}; "
+                             f"expected ({n}, dim).")
+
+    # ─────────── Evaluation ───────────
+    records: Dict[str, Dict[str, float]] = {}
+    confusion_matrices = []
+    model_names = []
+
+    nce = NodeClassificationEvaluator(test_size=test_size,
+                                      random_state=random_state)
+
+    for name, emb in embeddings_dict.items():
+        res = nce.evaluate(
+            embeddings=emb,
+            labels=labels,
+        )
+        model_names.append(name)
+        confusion_matrices.append(res["confusion_matrix_test"])
+
+        # extract scalar metrics
+        records[name] = {
+            "train_accuracy": res["train_accuracy"],
+            "test_accuracy": res["test_accuracy"],
+            "precision": res["precision"],
+            "recall": res["recall"],
+            "f1": res["f1"],
+            "precision_macro": res["precision_macro"],
+            "recall_macro": res["recall_macro"],
+            "f1_macro": res["f1_macro"],
+        }
+
+    df = pd.DataFrame.from_dict(records, orient="index")
+    df.index.name = "embedding"
+
+    # ─────────── Persist metrics CSV ───────────
+    if out_dir is not None:
+        out_dir.mkdir(parents=True, exist_ok=True)
+        csv_path = out_dir / f"classif_metrics_{int(test_size * 100)}.csv"
+        df.to_csv(csv_path, float_format="%.6f")
+        logger.info("Saved metrics → %s", csv_path)
+
+    # ─────────── Plot confusion matrices ───────────
+    n_models = len(model_names)
+    cols = 2
+    rows = ceil(n_models / cols)
+    fig, axes = plt.subplots(rows, cols, figsize=(6 * cols, 5 * rows), squeeze=False)
+
+    for idx, (name, cm) in enumerate(zip(model_names, confusion_matrices)):
+        r, c = divmod(idx, cols)
+        ax = axes[r][c]
+        im = ax.imshow(cm, cmap=plt.cm.Blues, interpolation="nearest")
+        ax.set_title(f"{name} — Test CM")
+        ax.set_xlabel("Predicted")
+        ax.set_ylabel("True")
+        # remove ticks
+        ax.set_xticks([])
+        ax.set_yticks([])
+        # annotate cells
+        thresh = cm.max() / 2
+        for i in range(cm.shape[0]):
+            for j in range(cm.shape[1]):
+                color = "white" if cm[i, j] > thresh else "black"
+                ax.text(j, i, cm[i, j],
+                        ha="center", va="center", color=color, fontsize=16)
+    # remove any unused subplots
+    for idx in range(n_models, rows * cols):
+        r, c = divmod(idx, cols)
+        fig.delaxes(axes[r][c])
+
+    split_pct = int(test_size * 100)
+    default_title = f"Node Classification Confusion Matrices (test size = {split_pct}%)"
+    fig.suptitle(title or default_title, fontsize=14, y=1.02)
+    plt.tight_layout()
+
+    if out_dir is not None:
+        cm_path = out_dir / f"classif_cm_{split_pct}.png"
+        fig.savefig(cm_path, dpi=300, bbox_inches="tight")
+        logger.info("Saved confusion matrices → %s", cm_path)
+    plt.close(fig)
+
+    return df

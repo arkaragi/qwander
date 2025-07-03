@@ -58,9 +58,6 @@ class NodeClassificationEvaluator:
     random_state: int or None, optional
         Random seed for reproducibility.
 
-    classifier: sklearn estimator, optional
-        Classifier with fit/predict interface. Defaults to LogisticRegression.
-
     Attributes
     ----------
     test_size: float
@@ -78,12 +75,12 @@ class NodeClassificationEvaluator:
 
     def __init__(self,
                  test_size: float = 0.3,
-                 random_state: Optional[int] = None,
-                 classifier: Optional[Any] = None):
+                 random_state: Optional[int] = None):
         self.test_size = test_size
         self.random_state = random_state
-        self.classifier = classifier or LogisticRegression(max_iter=1000, random_state=random_state)
         self._results = None
+        self.classifier = LogisticRegression(max_iter=1000,
+                                             random_state=random_state)
 
     @property
     def results(self) -> Optional[Dict[str, Any]]:
